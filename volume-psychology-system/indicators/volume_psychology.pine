@@ -1,0 +1,83 @@
+//@version=5
+indicator("交易量", shorttitle="交易量", overlay=false)
+
+// 添加输入变量，用于设置均线天数，默认为9天
+ma_length = input.int(9, title="均线天数", minval=1)
+
+// 添加输入变量，用于选择成交量的单位
+volume_unit = input.string("K", title="成交量单位", options=["K", "M", "B", "T"], tooltip="选择成交量的单位：K（千），M（百万），B（十亿），T（万亿）")
+
+// 将选择的单位转换为数值
+unit_multiplier = volume_unit == "K" ? 1000 : volume_unit == "M" ? 1000000 : volume_unit == "B" ? 1000000000 : volume_unit == "T" ? 1000000000000 : 1
+
+// 计算调整后的成交量
+adjusted_volume = volume / unit_multiplier
+
+// 确定阳线和阴线的颜色，并设置透明度为38%
+volume_color = close >= open ? color.new(color.green, 62) : color.new(color.red, 62)
+
+// 阳线和阴线的定义
+isBullish = close > open
+isBearish = close < open
+
+// 定义获取特定K线成交量的函数，并根据选择的单位调整成交量
+volumeN(index) =>
+    na(volume[index]) ? 0 : volume[index] / unit_multiplier  // 如果成交量不存在，则返回0，否则调整成交量单位
+
+// 定义计算均线的函数
+calc_ma_bars(condition, max_value) =>
+    sum = 0.0
+    count = 0
+    for i = 1 to 100  // 循环检查足够多的K线，确保能找到指定数量的K线
+        if (count < ma_length and condition[i] and volumeN(i) <= max_value * 2)
+            sum := sum + volumeN(i)
+            count := count + 1
+        if (count == ma_length)
+            break
+    count == ma_length ? sum / ma_length : na  // 如果找到指定数量的K线，则返回平均值；否则返回na
+
+// 计算和绘制总成交量的均线，设置颜色为黑色
+volume_ma = ta.sma(adjusted_volume, ma_length)
+
+// 绘制调整后的成交量柱，颜色根据判断结果决定
+max_ma = math.max(math.max(volume_ma, 0), 0) // 初始化 max_ma 以确保 isHighVolume 变量能正常使用
+isHighVolume = adjusted_volume > max_ma * 2
+highVolumeColor = color.new(color.black, 62)
+plot(adjusted_volume, style=plot.style_columns, color=isHighVolume ? highVolumeColor : volume_color, title="成交量")
+
+// 现在绘制总成交量的均线
+plot(volume_ma, color=color.black, title="成交量SMA", linewidth=2)
+
+// 判断成交量是否高于简单移动平均值的两倍
+max_volume_ma = volume_ma * 2
+
+// 计算阳线和阴线成交量的均线
+ma_bullish = calc_ma_bars(close > open, max_volume_ma)
+ma_bearish = calc_ma_bars(close < open, max_volume_ma)
+
+// 重新计算最大值，以包含阳线和阴线的均线
+max_ma := math.max(math.max(ma_bullish, ma_bearish), volume_ma)
+
+// 绘制阳线和阴线成交量均线，设置线条粗细为2
+plot(ma_bullish, color=color.green, title="成交量阳线9均线", linewidth=2)
+plot(ma_bearish, color=color.red, title="成交量阴线9均线", linewidth=2)
+
+// 定义成交量超买和超卖条件
+isOverbought = ma_bullish > ma_bearish * 2  // 阳线成交量均线是阴线的两倍
+isOversold = ma_bearish > ma_bullish * 2    // 阴线成交量均线是阳线的两倍
+
+// 根据超买和超卖条件改变背景颜色
+bgcolor(isOverbought ? color.new(color.red, 80) : na, title="成交量超买背景")  // 超买背景设为红色，透明度80%
+bgcolor(isOversold ? color.new(color.green, 80) : na, title="成交量超卖背景") // 超卖背景设为绿色，透明度80%
+
+// 定义阳线高成交量的警报条件
+alertcondition(isHighVolume and isBullish, title="阳线黑柱子", message="阳线成交量高于均值两倍！")
+
+// 定义阴线高成交量的警报条件
+alertcondition(isHighVolume and isBearish, title="阴线黑柱子", message="阴线成交量高于均值两倍！")
+
+// 隐藏重合的数值
+plot(na, title="隐藏重合数值", display=display.none)
+
+
+
