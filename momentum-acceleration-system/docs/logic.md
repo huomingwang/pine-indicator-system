@@ -34,7 +34,7 @@ power 的 9 周期均线。
 
 条件：
 
-- power > powerSma × 2
+- power > powerSma × 2 ×1.2
 - 当前K线是阴线
 
 ## Core Philosophy
