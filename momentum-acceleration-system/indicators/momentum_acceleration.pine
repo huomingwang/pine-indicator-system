@@ -1,5 +1,5 @@
 //@version=5
-indicator("加速敏感(周期,强弱）", shorttitle="动能加速敏感(周期,强弱)", overlay=true)
+indicator("momentum_acceleration）", shorttitle="momentum_acceleration)", overlay=true)
 
 // 成交量单位输入（改成单行写法，避免换行导致的括号报错）
 volumeUnit = input.string("K", title="成交量单位", options=["K", "M", "B", "T"], tooltip="选择成交量的单位：K（千），M（百万），B（十亿），T（万亿）")
