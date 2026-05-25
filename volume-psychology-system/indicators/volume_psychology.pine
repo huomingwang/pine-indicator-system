@@ -1,5 +1,5 @@
 //@version=5
-indicator("交易量", shorttitle="交易量", overlay=false)
+indicator("多空量能博弈", shorttitle="多空量能博弈", overlay=false)
 
 // 添加输入变量，用于设置均线天数，默认为9天
 ma_length = input.int(9, title="均线天数", minval=1)
