@@ -1,1 +1,60 @@
+//@version=5
+indicator("加速敏感(周期,强弱）", shorttitle="动能加速敏感(周期,强弱)", overlay=true)
 
+// 成交量单位输入（改成单行写法，避免换行导致的括号报错）
+volumeUnit = input.string("K", title="成交量单位", options=["K", "M", "B", "T"], tooltip="选择成交量的单位：K（千），M（百万），B（十亿），T（万亿）")
+
+// 成交量换算因子
+volumeFactor = switch volumeUnit
+    "K" => 1e3
+    "M" => 1e6
+    "B" => 1e9
+    "T" => 1e12
+    => 1e6
+
+// 换算后的成交量
+adjustedVolume = volume / volumeFactor
+
+// K线方向
+isBullish = close > open
+isBearish = close < open
+
+// 影线
+upperShadow = isBullish ? (high - close) : (high - open)
+lowerShadow = isBullish ? (open - low)   : (close - low)
+
+// 实体长度（无方向）
+priceChange = isBullish ? (close - open) : (open - close)
+
+// 动力拆分：powerBase + power
+powerBase = priceChange + ((isBullish ? (upperShadow - lowerShadow) : (lowerShadow - upperShadow)) * 0.5)
+power     = powerBase * adjustedVolume / open
+
+// 绘制动力值
+plotchar(power, title="动力", char="", location=location.absolute, size=size.tiny, color=isBullish ? color.green : color.red)
+
+// 均线
+powerSma  = ta.sma(power, 9)
+volumeSma = ta.sma(adjustedVolume, 9)
+
+// 加速判定（保持你原逻辑）
+isBullishAccelerate = (power > powerSma * 2) and (adjustedVolume >= 1.2 * volumeSma)
+isBearishAccelerate = (power > powerSma * 2) and (adjustedVolume >= 1.2 * volumeSma)
+
+// 标记
+plotshape(isBullishAccelerate and isBullish, style=shape.labelup,   location=location.belowbar, color=color.green, text="上加速")
+plotshape(isBearishAccelerate and isBearish, style=shape.labeldown, location=location.abovebar, color=color.red,   text="下加速")
+
+// 警报
+alertcondition(isBullishAccelerate and isBullish, title="向上加速（上加速）", message="动力和加速指标：向上加速（阳线）")
+alertcondition(isBearishAccelerate and isBearish, title="向下加速（下加速）", message="动力和加速指标：向下加速（阴线）")
+
+// 标签显示动力值
+var label lblPower = na
+if not na(lblPower)
+    label.delete(lblPower)
+
+lblPower := label.new(bar_index, high, str.tostring(power, "#.##"), color=color.new(color.white, 0), textcolor=isBullish ? color.green : color.red, style=label.style_label_down, size=size.small)
+
+// 动力SMA（隐藏）
+plot(powerSma, title="动力值的9周期SMA", color=na)
