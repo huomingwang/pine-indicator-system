@@ -27,7 +27,7 @@ lowerShadow = isBullish ? (open - low)   : (close - low)
 priceChange = isBullish ? (close - open) : (open - close)
 
 // 动力拆分：powerBase + power
-powerBase = priceChange + ((isBullish ? (upperShadow - lowerShadow) : (lowerShadow - upperShadow)) * 0.5)
+powerBase = priceChange + ((isBullish ? (lowerShadow - upperShadow) : (upperShadow - lowerShadow)) * 0.5)
 power     = powerBase * adjustedVolume / open
 
 // 绘制动力值
