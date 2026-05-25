@@ -49,8 +49,8 @@ plotshape(isBullishAccelerate, style=shape.labelup, location=location.belowbar, 
 plotshape(isBearishAccelerate, style=shape.labeldown, location=location.abovebar, color=color.red, text="下加速")
 
 // 警报
-alertcondition(isBullishAccelerate and isBullish, title="向上加速（上加速）", message="动力和加速指标：向上加速（阳线）")
-alertcondition(isBearishAccelerate and isBearish, title="向下加速（下加速）", message="动力和加速指标：向下加速（阴线）")
+alertcondition(isBullishAccelerate, title="向上加速（上加速）", message="动力和加速指标：向上加速（阳线）")
+alertcondition(isBearishAccelerate, title="向下加速（下加速）", message="动力和加速指标：向下加速（阴线）")
 
 // 标签显示动力值
 var label lblPower = na
