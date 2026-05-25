@@ -33,17 +33,20 @@ power     = powerBase * adjustedVolume / open
 // 绘制动力值
 plotchar(power, title="动力", char="", location=location.absolute, size=size.tiny, color=isBullish ? color.green : color.red)
 
+// 动能强度
+absPower = math.abs(power)
+
 // 均线
-powerSma  = ta.sma(power, 9)
+powerSma  = ta.sma(absPower, 9)
 volumeSma = ta.sma(adjustedVolume, 9)
 
-// 加速判定（保持你原逻辑）
-isBullishAccelerate = (power > powerSma * 2) and (adjustedVolume >= 1.2 * volumeSma)
-isBearishAccelerate = (power > powerSma * 2) and (adjustedVolume >= 1.2 * volumeSma)
+// 加速判定
+isBullishAccelerate = isBullish and absPower > powerSma * 2 and adjustedVolume >= 1.2 * volumeSma
+isBearishAccelerate = isBearish and absPower > powerSma * 2 and adjustedVolume >= 1.2 * volumeSma
 
 // 标记
-plotshape(isBullishAccelerate and isBullish, style=shape.labelup,   location=location.belowbar, color=color.green, text="上加速")
-plotshape(isBearishAccelerate and isBearish, style=shape.labeldown, location=location.abovebar, color=color.red,   text="下加速")
+plotshape(isBullishAccelerate, style=shape.labelup, location=location.belowbar, color=color.green, text="上加速")
+plotshape(isBearishAccelerate, style=shape.labeldown, location=location.abovebar, color=color.red, text="下加速")
 
 // 警报
 alertcondition(isBullishAccelerate and isBullish, title="向上加速（上加速）", message="动力和加速指标：向上加速（阳线）")
