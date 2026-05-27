@@ -1,27 +1,26 @@
 //@version=6
-indicator("去跳空K线）", overlay=true)
-
+indicator("去跳空K线", shorttitle="去跳空K线", overlay=true)
 // 用户自定义回溯周期
 lookback = input.int(1000, "回溯周期", minval=1)
-
 // 平滑开盘价，消除跳空
-adjusted_open = na(close[1]) or bar_index < last_bar_index - lookback ? open : close[1]
-
-// 判断阳线和阴线
-isBullish = close > adjusted_open
-
+adjustedOpen = na(close[1]) or bar_index < last_bar_index - lookback ? open : close[1]
+// 保证绘制K线时开盘价和收盘价都在最高/最低价范围内
+adjustedHigh = math.max(high, math.max(adjustedOpen, close))
+adjustedLow = math.min(low, math.min(adjustedOpen, close))
+// 判断阳线、阴线和十字线
+isBullish = close > adjustedOpen
+isBearish = close < adjustedOpen
 // 定义颜色
 bullishColor = color.new(color.green, 0)
 bearishColor = color.new(color.red, 0)
-
+dojiColor = color.new(color.gray, 0)
+candleColor = isBullish ? bullishColor : isBearish ? bearishColor : dojiColor
 // 绘制调整后的 K 线
-plotcandle(adjusted_open, high, low, close, 
-           color=isBullish ? bullishColor : bearishColor, 
+plotcandle(adjustedOpen, adjustedHigh, adjustedLow, close,
+           color=candleColor,
            bordercolor=color.black)
-
-// 添加指标框显示值但隐藏主图线条
-plot(adjusted_open, color=color.new(color.blue, 100), title="调整开盘价", display=display.none) // 隐藏主图线条
-plot(close, color=color.new(color.orange, 100), title="当前收盘价", display=display.none)     // 隐藏主图线条
-plot(high, color=color.new(color.green, 100), title="最高价", display=display.none)          // 隐藏主图线条
-plot(low, color=color.new(color.red, 100), title="最低价", display=display.none)             // 隐藏主图线条
-
+// 添加数据窗口显示值但隐藏主图线条
+plot(adjustedOpen, color=color.new(color.blue, 100), title="调整开盘价", display=display.data_window)
+plot(close, color=color.new(color.orange, 100), title="当前收盘价", display=display.data_window)
+plot(adjustedHigh, color=color.new(color.green, 100), title="调整最高价", display=display.data_window)
+plot(adjustedLow, color=color.new(color.red, 100), title="调整最低价", display=display.data_window)
