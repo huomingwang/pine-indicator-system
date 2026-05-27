@@ -62,8 +62,8 @@ float bullishAvg = array.size(bullishValues) > 0 ? array.sum(array.slice(bullish
 float bearishAvg = array.size(bearishValues) > 0 ? array.sum(array.slice(bearishValues, 0, math.min(array.size(bearishValues), maLength))) / math.min(array.size(bearishValues), maLength) : na
 
 // === 多空共识极端===
-isOverbought = bullishAvg > 2 * bearishAvg
-isOversold = bearishAvg > 2 * bullishAvg
+isBullConsensusExtreme = bullishAvg > 2 * bearishAvg
+isBearConsensusExtreme = bearishAvg > 2 * bullishAvg
 
 // === 报警条件 ===
 alertcondition((isBullish or isBearish) and (isBullishAccelerate or isBearishAccelerate) and consensus < consensusSma, title="加速价量比低", message="检测到加速价量比低的信号")
