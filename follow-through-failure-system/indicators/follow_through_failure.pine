@@ -79,5 +79,5 @@ plot(consensusSma, title="共识均线", color=color.black, linewidth=2)
 //plot(bullishAvg, title="阳线共识均值", color=color.green, linewidth=2)
 //plot(bearishAvg, title="阴线共识均值", color=color.red, linewidth=2)
 
-bgcolor(isOverbought ? color.new(color.red, 90) : na, title="多方共识极端信号")
-bgcolor(isOversold ? color.new(color.green, 90) : na, title="空方共识极端信号")
+bgcolor(isBullConsensusExtreme ? color.new(color.red, 90) : na, title="多方共识极端信号")
+bgcolor(isBearConsensusExtreme ? color.new(color.green, 90) : na, title="空方共识极端信号")
