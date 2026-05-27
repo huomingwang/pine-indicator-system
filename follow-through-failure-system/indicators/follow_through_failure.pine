@@ -1,5 +1,5 @@
 //@version=5
-indicator("动力和加速指标", shorttitle="放量推动 + 共识走弱 + 跟随失败周期强弱", overlay=false)
+indicator("pine-indicator-system", shorttitle="放量推动加速 + 共识走弱 + 跟随失败周期强弱", overlay=false)
 
 // === 用户输入参数 ===
 volumeUnit = input.string("K", title="成交量单位", options=["K", "M", "B", "T"], tooltip="选择成交量的单位：K（千），M（百万），B（十亿），T（万亿）")
