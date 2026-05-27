@@ -23,12 +23,12 @@ bodyLow = math.min(open, close)
 upperShadow = high - bodyHigh
 lowerShadow = bodyLow - low
 priceChange = math.abs(close - open)
-// 动力拆分：实体 + 影线偏向，再结合成交量
-shadowBias = isBullish ? lowerShadow - upperShadow : isBearish ? upperShadow - lowerShadow : 0
+// 动力拆分：实体 + 顺势影线偏向，再结合成交量
+shadowBias = isBullish ? upperShadow - lowerShadow : isBearish ? lowerShadow - upperShadow : 0
 powerBase = priceChange + shadowBias * 0.5
 power = open != 0 ? powerBase * adjustedVolume / open : na
-// 数据窗口显示动力值
-plot(power, title="动力", display=display.data_window)
+// 状态行和数据窗口显示K线动能值
+plot(power, title="K线动能值", color=isBullish ? color.green : color.red, display=display.status_line + display.data_window)
 // 动能强度
 absPower = math.abs(power)
 // 均线
@@ -48,5 +48,5 @@ var label lblPower = na
 if not na(lblPower)
     label.delete(lblPower)
 lblPower := label.new(bar_index, high, str.tostring(power, "#.##"), color=color.new(color.white, 0), textcolor=isBullish ? color.green : color.red, style=label.style_label_down, size=size.small)
-// 动力SMA（隐藏）
-plot(powerSma, title="动力值SMA", display=display.none)
+// 状态行和数据窗口显示动能均线值
+plot(powerSma, title="动能均线值", color=color.blue, display=display.status_line + display.data_window)
