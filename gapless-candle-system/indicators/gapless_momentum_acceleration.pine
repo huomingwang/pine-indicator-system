@@ -1,1 +1,75 @@
+//@version=5
+indicator("Gapless Momentum Acceleration", shorttitle="Gapless Momentum Accel", overlay=true)
 
+// 输入参数
+volumeUnit = input.string("K", title="成交量单位", options=["K", "M", "B", "T"], tooltip="选择成交量的单位：K（千），M（百万），B（十亿），T（万亿）")
+maLength = input.int(9, title="均线周期", minval=1)
+powerMultiplier = input.float(2.0, title="动力放大倍数", minval=0.1)
+volumeMultiplier = input.float(1.2, title="成交量放大倍数", minval=0.1)
+lookback = input.int(1000, "回溯周期", minval=1)
+
+// 成交量换算因子
+volumeFactor = switch volumeUnit
+    "K" => 1e3
+    "M" => 1e6
+    "B" => 1e9
+    "T" => 1e12
+    => 1e6
+
+// 换算后的成交量
+adjustedVolume = volume / volumeFactor
+
+// 平滑开盘价，消除跳空
+adjustedOpen = na(close[1]) or bar_index < last_bar_index - lookback ? open : close[1]
+
+// 保证绘制K线时开盘价和收盘价都在最高/最低价范围内
+adjustedHigh = math.max(high, math.max(adjustedOpen, close))
+adjustedLow = math.min(low, math.min(adjustedOpen, close))
+
+// K线方向：基于调整后的开盘价
+isBullish = close > adjustedOpen
+isBearish = close < adjustedOpen
+
+// 实体与影线：基于调整后的K线结构
+bodyHigh = math.max(adjustedOpen, close)
+bodyLow = math.min(adjustedOpen, close)
+upperShadow = adjustedHigh - bodyHigh
+lowerShadow = bodyLow - adjustedLow
+priceChange = math.abs(close - adjustedOpen)
+
+// 动力拆分：实体 + 顺势影线偏向，再结合成交量
+shadowBias = isBullish ? upperShadow - lowerShadow : isBearish ? lowerShadow - upperShadow : 0
+powerBase = priceChange + shadowBias * 0.5
+power = adjustedOpen != 0 ? powerBase * adjustedVolume / adjustedOpen : na
+
+// 状态行和数据窗口显示K线动能值
+plot(power, title="K线动能值", color=isBullish ? color.green : isBearish ? color.red : color.gray, display=display.status_line + display.data_window)
+
+// 动能强度
+absPower = math.abs(power)
+
+// 均线
+powerSma = ta.sma(absPower, maLength)
+volumeSma = ta.sma(adjustedVolume, maLength)
+
+// 加速判定
+isBullishAccelerate = isBullish and absPower > powerSma * powerMultiplier and adjustedVolume >= volumeMultiplier * volumeSma
+isBearishAccelerate = isBearish and absPower > powerSma * powerMultiplier and adjustedVolume >= volumeMultiplier * volumeSma
+
+// 标记
+plotshape(isBullishAccelerate, style=shape.labelup, location=location.belowbar, color=color.green, text="上加速")
+plotshape(isBearishAccelerate, style=shape.labeldown, location=location.abovebar, color=color.red, text="下加速")
+
+// 警报
+alertcondition(isBullishAccelerate, title="向上加速（上加速）", message="动力和加速指标：向上加速（阳线）")
+alertcondition(isBearishAccelerate, title="向下加速（下加速）", message="动力和加速指标：向下加速（阴线）")
+
+// 标签显示最新动力值
+var label lblPower = na
+if not na(lblPower)
+    label.delete(lblPower)
+
+lblPower := label.new(bar_index, high, str.tostring(power, "#.##"), color=color.new(color.white, 0), textcolor=isBullish ? color.green : isBearish ? color.red : color.gray, style=label.style_label_down, size=size.small)
+
+// 状态行和数据窗口显示动能均线值
+plot(powerSma, title="动能均线值", color=color.blue, display=display.status_line + display.data_window)
