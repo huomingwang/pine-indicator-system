@@ -1,10 +1,12 @@
 //@version=5
-indicator("Follow Through Failure", shorttitle="放量推动加速 + 共识走弱 + 跟随失败周期强弱", overlay=false)
-
+indicator("Follow Through Failure", shorttitle="跟随失败", overlay=false)
 // === 用户输入参数 ===
 volumeUnit = input.string("K", title="成交量单位", options=["K", "M", "B", "T"], tooltip="选择成交量的单位：K（千），M（百万），B（十亿），T（万亿）")
 maLength = input.int(9, title="均线周期", minval=1, tooltip="设置动力/共识均值所使用的周期")
-
+powerMultiplier = input.float(2.0, title="动力放大倍数", minval=0.1)
+volumeMultiplier = input.float(1.2, title="成交量放大倍数", minval=0.1)
+shadowWeight = input.float(0.5, title="影线权重", minval=0.0)
+consensusScale = input.float(10000, title="共识缩放系数", minval=1)
 // === 成交量换算 ===
 volumeFactor = switch volumeUnit
     "K" => 1e3
@@ -14,70 +16,66 @@ volumeFactor = switch volumeUnit
     => 1e3
 adjustedVolume = volume / volumeFactor
 adjustedVolumeSMA = ta.sma(adjustedVolume, maLength)
-
 // === K线结构与基础计算 ===
 isBullish = close > open
 isBearish = close < open
-upperShadow = isBullish ? high - close : high - open
-lowerShadow = isBullish ? open - low : close - low
-priceChange = isBullish ? close - open : open - close
-
+bodyHigh = math.max(open, close)
+bodyLow = math.min(open, close)
+upperShadow = high - bodyHigh
+lowerShadow = bodyLow - low
+priceChange = math.abs(close - open)
 // === 结构强度 X（价格归一化，纯结构，不含成交量） ===
 shadowBias =
-     isBullish ? (upperShadow - lowerShadow) :
-     isBearish ? (lowerShadow - upperShadow) :
+     isBullish ? upperShadow - lowerShadow :
+     isBearish ? lowerShadow - upperShadow :
      0.0
-
-structureX = (priceChange + shadowBias * 0.5) / open
-
+structureRaw = priceChange + shadowBias * shadowWeight
+structureX = open != 0 ? structureRaw / open : na
 // === 计算动力（power）与共识（consensus） ===
 // 动力 = 结构强度 × 成交量
 power = structureX * adjustedVolume
-
-// 共识 = 结构强度 ÷ 成交量 × 缩放系数（structureX 已包含 /open，不再重复 /open）
-consensus = (structureX / adjustedVolume) * 10000
-
-powerSma = ta.sma(power, maLength)
+// 共识 = 结构强度 ÷ 成交量 × 缩放系数
+consensus = adjustedVolume != 0 ? structureX / adjustedVolume * consensusScale : na
+absPower = math.abs(power)
+powerSma = ta.sma(absPower, maLength)
 consensusSma = ta.sma(consensus, maLength)
-
 // === 加速判定逻辑 ===
-isBullishAccelerate = power > powerSma * 2 and adjustedVolume >= 1.2 * adjustedVolumeSMA
-isBearishAccelerate = power > powerSma * 2 and adjustedVolume >= 1.2 * adjustedVolumeSMA
-
-// === 构建阳/阴线数组并计算均值 ===
+isBullishAccelerate = isBullish and absPower > powerSma * powerMultiplier and adjustedVolume >= volumeMultiplier * adjustedVolumeSMA
+isBearishAccelerate = isBearish and absPower > powerSma * powerMultiplier and adjustedVolume >= volumeMultiplier * adjustedVolumeSMA
+// === 自定义共识平均数组（最近N根阳线/阴线） ===
 var float[] bullishValues = array.new_float(0)
 var float[] bearishValues = array.new_float(0)
-
-if (isBullish)
+if isBullish and not na(consensus)
     array.push(bullishValues, consensus)
-if (isBearish)
+if isBearish and not na(consensus)
     array.push(bearishValues, consensus)
-
-if (array.size(bullishValues) > maLength)
+// 限制数组长度
+if array.size(bullishValues) > maLength
     array.shift(bullishValues)
-if (array.size(bearishValues) > maLength)
+if array.size(bearishValues) > maLength
     array.shift(bearishValues)
-
-float bullishAvg = array.size(bullishValues) > 0 ? array.sum(array.slice(bullishValues, 0, math.min(array.size(bullishValues), maLength))) / math.min(array.size(bullishValues), maLength) : na
-float bearishAvg = array.size(bearishValues) > 0 ? array.sum(array.slice(bearishValues, 0, math.min(array.size(bearishValues), maLength))) / math.min(array.size(bearishValues), maLength) : na
-
-// === 多空共识极端===
-isBullConsensusExtreme = bullishAvg > 2 * bearishAvg
-isBearConsensusExtreme = bearishAvg > 2 * bullishAvg
-
+// 计算均值
+bullishAvg = array.size(bullishValues) > 0 ? array.sum(bullishValues) / array.size(bullishValues) : na
+bearishAvg = array.size(bearishValues) > 0 ? array.sum(bearishValues) / array.size(bearishValues) : na
+// === 多空共识极端 ===
+isBullConsensusExtreme = not na(bullishAvg) and not na(bearishAvg) and bearishAvg > 0 and bullishAvg > 2 * bearishAvg
+isBearConsensusExtreme = not na(bullishAvg) and not na(bearishAvg) and bullishAvg > 0 and bearishAvg > 2 * bullishAvg
+// === 跟随失败判定 ===
+isBullFollowThroughFailure = isBullishAccelerate and consensus < consensusSma
+isBearFollowThroughFailure = isBearishAccelerate and consensus < consensusSma
 // === 报警条件 ===
-alertcondition((isBullish or isBearish) and (isBullishAccelerate or isBearishAccelerate) and consensus < consensusSma, title="加速价量比低", message="检测到加速价量比低的信号")
-
+alertcondition(isBullFollowThroughFailure, title="向上跟随失败", message="检测到向上放量推动，但单位成交量推动效率下降")
+alertcondition(isBearFollowThroughFailure, title="向下跟随失败", message="检测到向下放量推动，但单位成交量推动效率下降")
 // === 图形绘制 ===
-consensusColor = (isBullish and isBullishAccelerate and consensus < consensusSma) or
-                 (isBearish and isBearishAccelerate and consensus < consensusSma) ? color.new(color.black, 30) :
-                 (isBullish ? color.new(color.green, 62) : color.new(color.red, 62))
-
+consensusColor = isBullFollowThroughFailure or isBearFollowThroughFailure ? color.new(color.black, 30) :
+                 isBullish ? color.new(color.green, 62) :
+                 isBearish ? color.new(color.red, 62) :
+                 color.new(color.gray, 62)
 plot(consensus, title="共识", color=consensusColor, style=plot.style_columns)
 plot(consensusSma, title="共识均线", color=color.black, linewidth=2)
-
-//plot(bullishAvg, title="阳线共识均值", color=color.green, linewidth=2)
-//plot(bearishAvg, title="阴线共识均值", color=color.red, linewidth=2)
-
+plot(power, title="动力", display=display.data_window)
+plot(powerSma, title="动力均线", display=display.data_window)
+plot(bullishAvg, title="阳线共识平均值", color=color.green, linewidth=2)
+plot(bearishAvg, title="阴线共识平均值", color=color.red, linewidth=2)
 bgcolor(isBullConsensusExtreme ? color.new(color.red, 90) : na, title="多方共识极端信号")
 bgcolor(isBearConsensusExtreme ? color.new(color.green, 90) : na, title="空方共识极端信号")
