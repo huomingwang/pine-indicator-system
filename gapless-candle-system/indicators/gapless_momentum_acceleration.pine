@@ -1,75 +1,112 @@
 //@version=5
-indicator("Gapless Momentum Acceleration", shorttitle="Gapless Momentum Accel", overlay=true)
+indicator("Follow Through Failure", shorttitle="去除跳空跟随失败", overlay=false)
 
-// 输入参数
+// === 用户输入参数 ===
 volumeUnit = input.string("K", title="成交量单位", options=["K", "M", "B", "T"], tooltip="选择成交量的单位：K（千），M（百万），B（十亿），T（万亿）")
-maLength = input.int(9, title="均线周期", minval=1)
+maLength = input.int(9, title="均线周期", minval=1, tooltip="设置动力/共识均值所使用的周期")
 powerMultiplier = input.float(2.0, title="动力放大倍数", minval=0.1)
 volumeMultiplier = input.float(1.2, title="成交量放大倍数", minval=0.1)
+shadowWeight = input.float(0.5, title="影线权重", minval=0.0)
+consensusScale = input.float(10000, title="共识缩放系数", minval=1)
 lookback = input.int(1000, "回溯周期", minval=1)
 
-// 成交量换算因子
+// === 成交量换算 ===
 volumeFactor = switch volumeUnit
     "K" => 1e3
     "M" => 1e6
     "B" => 1e9
     "T" => 1e12
-    => 1e6
+    => 1e3
 
-// 换算后的成交量
 adjustedVolume = volume / volumeFactor
+adjustedVolumeSMA = ta.sma(adjustedVolume, maLength)
 
-// 平滑开盘价，消除跳空
+// === 去跳空K线结构 ===
 adjustedOpen = na(close[1]) or bar_index < last_bar_index - lookback ? open : close[1]
-
-// 保证绘制K线时开盘价和收盘价都在最高/最低价范围内
 adjustedHigh = math.max(high, math.max(adjustedOpen, close))
 adjustedLow = math.min(low, math.min(adjustedOpen, close))
 
-// K线方向：基于调整后的开盘价
+// === K线结构与基础计算：基于调整后的开盘价 ===
 isBullish = close > adjustedOpen
 isBearish = close < adjustedOpen
 
-// 实体与影线：基于调整后的K线结构
 bodyHigh = math.max(adjustedOpen, close)
 bodyLow = math.min(adjustedOpen, close)
+
 upperShadow = adjustedHigh - bodyHigh
 lowerShadow = bodyLow - adjustedLow
 priceChange = math.abs(close - adjustedOpen)
 
-// 动力拆分：实体 + 顺势影线偏向，再结合成交量
-shadowBias = isBullish ? upperShadow - lowerShadow : isBearish ? lowerShadow - upperShadow : 0
-powerBase = priceChange + shadowBias * 0.5
-power = adjustedOpen != 0 ? powerBase * adjustedVolume / adjustedOpen : na
+// === 结构强度 X（价格归一化，纯结构，不含成交量） ===
+shadowBias =
+     isBullish ? upperShadow - lowerShadow :
+     isBearish ? lowerShadow - upperShadow :
+     0.0
 
-// 状态行和数据窗口显示K线动能值
-plot(power, title="K线动能值", color=isBullish ? color.green : isBearish ? color.red : color.gray, display=display.status_line + display.data_window)
+structureRaw = priceChange + shadowBias * shadowWeight
+structureX = adjustedOpen != 0 ? structureRaw / adjustedOpen : na
 
-// 动能强度
+// === 计算动力（power）与共识（consensus） ===
+// 动力 = 结构强度 × 成交量
+power = structureX * adjustedVolume
+
+// 共识 = 结构强度 ÷ 成交量 × 缩放系数
+consensus = adjustedVolume != 0 ? structureX / adjustedVolume * consensusScale : na
+
 absPower = math.abs(power)
-
-// 均线
 powerSma = ta.sma(absPower, maLength)
-volumeSma = ta.sma(adjustedVolume, maLength)
+consensusSma = ta.sma(consensus, maLength)
 
-// 加速判定
-isBullishAccelerate = isBullish and absPower > powerSma * powerMultiplier and adjustedVolume >= volumeMultiplier * volumeSma
-isBearishAccelerate = isBearish and absPower > powerSma * powerMultiplier and adjustedVolume >= volumeMultiplier * volumeSma
+// === 加速判定逻辑 ===
+isBullishAccelerate = isBullish and absPower > powerSma * powerMultiplier and adjustedVolume >= volumeMultiplier * adjustedVolumeSMA
+isBearishAccelerate = isBearish and absPower > powerSma * powerMultiplier and adjustedVolume >= volumeMultiplier * adjustedVolumeSMA
 
-// 标记
-plotshape(isBullishAccelerate, style=shape.labelup, location=location.belowbar, color=color.green, text="上加速")
-plotshape(isBearishAccelerate, style=shape.labeldown, location=location.abovebar, color=color.red, text="下加速")
+// === 自定义共识平均数组（最近N根阳线/阴线） ===
+var float[] bullishValues = array.new_float(0)
+var float[] bearishValues = array.new_float(0)
 
-// 警报
-alertcondition(isBullishAccelerate, title="向上加速（上加速）", message="动力和加速指标：向上加速（阳线）")
-alertcondition(isBearishAccelerate, title="向下加速（下加速）", message="动力和加速指标：向下加速（阴线）")
+if isBullish and not na(consensus)
+    array.push(bullishValues, consensus)
 
-// 标签显示最新动力值
-var label lblPower = na
-if not na(lblPower)
-    label.delete(lblPower)
+if isBearish and not na(consensus)
+    array.push(bearishValues, consensus)
 
-lblPower := label.new(bar_index, high, str.tostring(power, "#.##"), color=color.new(color.white, 0), textcolor=isBullish ? color.green : isBearish ? color.red : color.gray, style=label.style_label_down, size=size.small)
+// 限制数组长度
+if array.size(bullishValues) > maLength
+    array.shift(bullishValues)
 
-// 状态行和数据窗口显示动能均线值
-plot(powerSma, title="动能均线值", color=color.blue, display=display.status_line + display.data_window)
+if array.size(bearishValues) > maLength
+    array.shift(bearishValues)
+
+// 计算均值
+bullishAvg = array.size(bullishValues) > 0 ? array.sum(bullishValues) / array.size(bullishValues) : na
+bearishAvg = array.size(bearishValues) > 0 ? array.sum(bearishValues) / array.size(bearishValues) : na
+
+// === 多空共识极端 ===
+isBullConsensusExtreme = not na(bullishAvg) and not na(bearishAvg) and bearishAvg > 0 and bullishAvg > 2 * bearishAvg
+isBearConsensusExtreme = not na(bullishAvg) and not na(bearishAvg) and bullishAvg > 0 and bearishAvg > 2 * bullishAvg
+
+// === 跟随失败判定 ===
+isBullFollowThroughFailure = isBullishAccelerate and consensus < consensusSma
+isBearFollowThroughFailure = isBearishAccelerate and consensus < consensusSma
+isFollowThroughFailure = isBullFollowThroughFailure or isBearFollowThroughFailure
+
+// === 报警条件 ===
+alertcondition(isFollowThroughFailure, title="跟随失败", message="检测到放量加速推动，但单位成交量推动效率下降")
+
+// === 图形绘制 ===
+consensusColor = isBullFollowThroughFailure or isBearFollowThroughFailure ? color.new(color.black, 30) :
+                 isBullish ? color.new(color.green, 62) :
+                 isBearish ? color.new(color.red, 62) :
+                 color.new(color.gray, 62)
+
+plot(consensus, title="共识", color=consensusColor, style=plot.style_columns)
+plot(consensusSma, title="共识均线", color=color.black, linewidth=2)
+plot(power, title="动力", display=display.data_window)
+plot(powerSma, title="动力均线", display=display.data_window)
+plot(bullishAvg, title="阳线共识平均值", color=color.green, linewidth=2)
+plot(bearishAvg, title="阴线共识平均值", color=color.red, linewidth=2)
+
+bgcolor(isBullConsensusExtreme ? color.new(color.red, 90) : na, title="多方共识极端信号")
+bgcolor(isBearConsensusExtreme ? color.new(color.green, 90) : na, title="空方共识极端信号")
+
