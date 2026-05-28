@@ -63,9 +63,9 @@ isBearConsensusExtreme = not na(bullishAvg) and not na(bearishAvg) and bullishAv
 // === 跟随失败判定 ===
 isBullFollowThroughFailure = isBullishAccelerate and consensus < consensusSma
 isBearFollowThroughFailure = isBearishAccelerate and consensus < consensusSma
+isFollowThroughFailure = isBullFollowThroughFailure or isBearFollowThroughFailure
 // === 报警条件 ===
-alertcondition(isBullFollowThroughFailure, title="向上跟随失败", message="检测到向上放量推动，但单位成交量推动效率下降")
-alertcondition(isBearFollowThroughFailure, title="向下跟随失败", message="检测到向下放量推动，但单位成交量推动效率下降")
+alertcondition(isFollowThroughFailure, title="跟随失败", message="检测到放量加速推动，但单位成交量推动效率明显下降")
 // === 图形绘制 ===
 consensusColor = isBullFollowThroughFailure or isBearFollowThroughFailure ? color.new(color.black, 30) :
                  isBullish ? color.new(color.green, 62) :
